@@ -35,7 +35,7 @@ def my_moves(game, player):
     """
 
     legal_moves = game.get_legal_moves(player=player)
-    return len(legal_moves)
+    return float(len(legal_moves))
 
 def moves_diff(game, player, gamma=1.0):
     """Calculate the heuristic value of a game state from the point of view
@@ -162,25 +162,28 @@ class CustomPlayer:
 
         self.time_left = time_left
 
-        # TODO: finish this function!
-
         # Perform any required initializations, including selecting an initial
         # move from the game board (i.e., an opening book), or returning
         # immediately if there are no legal moves
         lastiter_move = None
-        start_depth = self.search_depth
-        # if iterative deepening mode is enabled start with depth = 1, else just do specified depth
-        if self.iterative:
-            start_depth = 1
         try:
             # The search method call (alpha beta or minimax) should happen in
             # here in order to avoid timeout. The try/except block will
             # automatically catch the exception raised by the search method
             # when the timer gets close to expiring
-            for depth in xrange(start_depth, self.search_depth+1):
-                _, predmove = self.minimax(game, depth) if self.method == 'minimax' else self.alphabeta(game, depth)
-                # save the move suggested by last iteration on depth
-                lastiter_move = predmove
+            if self.iterative:
+                # Attempt to do minimax/alphabeta for increasing depths starting with 1
+                # till it hit the time limit
+                depth = 1
+                while True:
+                    # print("DEBUG>>> depth = %d" % depth)
+                    _, predmove = self.minimax(game, depth) if self.method == 'minimax' else self.alphabeta(game, depth)
+                    # save the move suggested by last iteration on depth
+                    lastiter_move = predmove
+                    depth += 1
+            else:
+                # Just do minimax/alphabeta for the specified number of search_depth
+                _, lastiter_move = self.minimax(game, self.search_depth) if self.method == 'minimax' else self.alphabeta(game, self.search_depth)
 
         except Timeout:
             # Handle any actions required at timeout, if necessary
@@ -216,11 +219,33 @@ class CustomPlayer:
         tuple(int, int)
             The best move for the current branch; (-1, -1) for no legal moves
         """
+        # Return the state utility if terminal
+        val = game.utility(self)
+        if val != 0.0:
+            return val, (-1, -1)
+        # Reached max depth via recursion, return the evaluation function score for CustomPlayer player.
+        if depth == 0:
+            return self.score(game, self), (-1, -1)
+        
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        # Initialize value of current state to very high value if minimizing node and low
+        # value for maximizing node
+        val = -99999.0 if maximizing_player else 99999.0
+        # Get all legal moves of the current active player
+        legal_moves = game.get_legal_moves()
+        nextmove = None
+        for move in legal_moves:
+            # Make a 'move' move on the boad w.r.t to current active player
+            newgame = game.forecast_move(move)
+            # Get the score of the new node recursively
+            newscore, _ = self.minimax(newgame, depth-1, maximizing_player=(not maximizing_player))
+            # If newscore is better w.r.t to 'maximizing_player', then update nextmove and val
+            if (maximizing_player and (newscore > val)) or ((not maximizing_player) and (newscore < val)):
+                val = newscore
+                nextmove = move
+        return val, nextmove
 
     def alphabeta(self, game, depth, alpha=float("-inf"), beta=float("inf"), maximizing_player=True):
         """Implement minimax search with alpha-beta pruning as described in the
@@ -254,8 +279,40 @@ class CustomPlayer:
         tuple(int, int)
             The best move for the current branch; (-1, -1) for no legal moves
         """
+        # Return the state utility if terminal
+        val = game.utility(self)
+        if val != 0.0:
+            return val, (-1, -1)
+        # Reached max depth via recursion, return the evaluation function score for CustomPlayer player.
+        if depth == 0:
+            return self.score(game, self), (-1, -1)
+        
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        # Initialize value of current state to very high value if minimizing node and low
+        # value for maximizing node
+        val = -99999.0 if maximizing_player else 99999.0
+        # Get all legal moves of the current active player
+        legal_moves = game.get_legal_moves()
+        # shuffle the moves list to try avoid any unlucky orderings (less pruning)
+        random.shuffle(legal_moves)
+        nextmove = None
+        for move in legal_moves:
+            # Make a 'move' move on the boad w.r.t to current active player
+            newgame = game.forecast_move(move)
+            # Get the score of the new node recursively
+            newscore, _ = self.alphabeta(newgame, depth-1, alpha=alpha, beta=beta, maximizing_player=(not maximizing_player))
+            # If newscore is better w.r.t to 'maximizing_player', then update nextmove and val
+            if (maximizing_player and (newscore > val)) or ((not maximizing_player) and (newscore < val)):
+                val = newscore
+                nextmove = move
+            # For a given min/max node, if val is poorer than its bound, then no need to evaluate its other siblings.
+            if (maximizing_player and val >= beta) or ((not maximizing_player) and val <= alpha):
+                return val, nextmove
+            if maximizing_player:
+                alpha = max(alpha, val)
+            else:
+                beta = min(beta, val)
+        return val, nextmove
+
