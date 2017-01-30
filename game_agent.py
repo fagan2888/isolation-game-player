@@ -14,6 +14,54 @@ class Timeout(Exception):
     pass
 
 
+def my_moves(game, player):
+    """Calculate the heuristic value of a game state from the point of view
+    of the given player as number of moves the player has.
+
+    Parameters
+    ----------
+    game : `isolation.Board`
+        An instance of `isolation.Board` encoding the current state of the
+        game (e.g., player locations and blocked cells).
+
+    player : object
+        A player instance in the current game (i.e., an object corresponding to
+        one of the player objects `game.__player_1__` or `game.__player_2__`.)
+
+    Returns
+    ----------
+    float
+        The heuristic value of the current game state to the specified player.
+    """
+
+    legal_moves = game.get_legal_moves(player=player)
+    return len(legal_moves)
+
+def moves_diff(game, player, gamma=1.0):
+    """Calculate the heuristic value of a game state from the point of view
+    of the given player as number of moves the player has.
+
+    Parameters
+    ----------
+    game : `isolation.Board`
+        An instance of `isolation.Board` encoding the current state of the
+        game (e.g., player locations and blocked cells).
+
+    player : object
+        A player instance in the current game (i.e., an object corresponding to
+        one of the player objects `game.__player_1__` or `game.__player_2__`.)
+
+    Returns
+    ----------
+    float
+        The heuristic value of the current game state to the specified player.
+    """
+
+    numA = len(game.get_legal_moves(player=player))
+    numB = len(game.get_legal_moves(player=game.get_opponent(player)))
+    return numA - gamma*numB
+
+
 def custom_score(game, player):
     """Calculate the heuristic value of a game state from the point of view
     of the given player.
@@ -34,8 +82,7 @@ def custom_score(game, player):
         The heuristic value of the current game state to the specified player.
     """
 
-    # TODO: finish this function!
-    raise NotImplementedError
+    return my_moves(game, player)
 
 
 class CustomPlayer:
@@ -120,20 +167,29 @@ class CustomPlayer:
         # Perform any required initializations, including selecting an initial
         # move from the game board (i.e., an opening book), or returning
         # immediately if there are no legal moves
-
+        lastiter_move = None
+        start_depth = self.search_depth
+        # if iterative deepening mode is enabled start with depth = 1, else just do specified depth
+        if self.iterative:
+            start_depth = 1
         try:
             # The search method call (alpha beta or minimax) should happen in
             # here in order to avoid timeout. The try/except block will
             # automatically catch the exception raised by the search method
             # when the timer gets close to expiring
-            pass
+            for depth in xrange(start_depth, self.search_depth+1):
+                _, predmove = self.minimax(game, depth) if self.method == 'minimax' else self.alphabeta(game, depth)
+                # save the move suggested by last iteration on depth
+                lastiter_move = predmove
 
         except Timeout:
             # Handle any actions required at timeout, if necessary
-            pass
+            # if no iterations completed, then return a random move.
+            if lastiter_move is None:
+                lastiter_move = legal_moves[random.randint(0, len(legal_moves) - 1)]
 
         # Return the best move from the last completed search iteration
-        raise NotImplementedError
+        return lastiter_move
 
     def minimax(self, game, depth, maximizing_player=True):
         """Implement the minimax search algorithm as described in the lectures.
