@@ -33,9 +33,43 @@ def my_moves(game, player):
     float
         The heuristic value of the current game state to the specified player.
     """
+    if game.is_loser(player):
+        return float("-inf")
+
+    if game.is_winner(player):
+        return float("inf")
 
     legal_moves = game.get_legal_moves(player=player)
     return float(len(legal_moves))
+
+def their_moves(game, player):
+    """Calculate the heuristic value of a game state from the point of view
+    of the given player as number of moves the player has.
+
+    Parameters
+    ----------
+    game : `isolation.Board`
+        An instance of `isolation.Board` encoding the current state of the
+        game (e.g., player locations and blocked cells).
+
+    player : object
+        A player instance in the current game (i.e., an object corresponding to
+        one of the player objects `game.__player_1__` or `game.__player_2__`.)
+
+    Returns
+    ----------
+    float
+        The heuristic value of the current game state to the specified player.
+    """
+    if game.is_loser(player):
+        return float("-inf")
+
+    if game.is_winner(player):
+        return float("inf")
+
+    # return negative of number of moves for the opponent
+    return -float(len(game.get_legal_moves(player=game.get_opponent(player))))
+
 
 def moves_diff(game, player, gamma=1.0):
     """Calculate the heuristic value of a game state from the point of view
@@ -57,10 +91,49 @@ def moves_diff(game, player, gamma=1.0):
         The heuristic value of the current game state to the specified player.
     """
 
+    if game.is_loser(player):
+        return float("-inf")
+
+    if game.is_winner(player):
+        return float("inf")
+
+    # number of moves for player
     numA = len(game.get_legal_moves(player=player))
+    # number of moves for opponent
     numB = len(game.get_legal_moves(player=game.get_opponent(player)))
     return numA - gamma*numB
 
+def blanks_diff_thiers(game, player):
+    """Calculate the heuristic value of a game state from the point of view
+    of the given player as number of moves the player has.
+
+    Parameters
+    ----------
+    game : `isolation.Board`
+        An instance of `isolation.Board` encoding the current state of the
+        game (e.g., player locations and blocked cells).
+
+    player : object
+        A player instance in the current game (i.e., an object corresponding to
+        one of the player objects `game.__player_1__` or `game.__player_2__`.)
+
+    Returns
+    ----------
+    float
+        The heuristic value of the current game state to the specified player.
+    """
+
+    if game.is_loser(player):
+        return float("-inf")
+
+    if game.is_winner(player):
+        return float("inf")
+
+    # Number of blanks in the board
+    numA = len(game.get_blank_spaces())
+    # Number of moves for the opponent
+    numB = len(game.get_legal_moves(player=game.get_opponent(player)))
+    return float(numA - numB)
 
 def custom_score(game, player):
     """Calculate the heuristic value of a game state from the point of view
@@ -82,7 +155,15 @@ def custom_score(game, player):
         The heuristic value of the current game state to the specified player.
     """
 
-    return my_moves(game, player)
+    #return my_moves(game, player)
+    #return moves_diff(game, player, gamma=1.5) # 72.14
+    #return moves_diff(game, player, gamma=2.0) # 70.71
+    #return moves_diff(game, player, gamma=0.5) # 79.29
+    #return their_moves(game, player) # 72.86
+    #return blanks_diff_thiers(game, player) #75.71
+
+    # Winning evaluation function
+    return moves_diff(game, player, gamma=0.5)
 
 
 class CustomPlayer:
@@ -116,13 +197,14 @@ class CustomPlayer:
     """
 
     def __init__(self, search_depth=3, score_fn=custom_score,
-                 iterative=True, method='minimax', timeout=10.):
+                 iterative=True, method='minimax', timeout=10., rseed=16):
         self.search_depth = search_depth
         self.iterative = iterative
         self.score = score_fn
         self.method = method
         self.time_left = None
         self.TIMER_THRESHOLD = timeout
+        random.seed(16)
 
     def get_move(self, game, legal_moves, time_left):
         """Search for the best move from the available legal moves and return a
@@ -175,8 +257,9 @@ class CustomPlayer:
                 # Attempt to do minimax/alphabeta for increasing depths starting with 1
                 # till it hit the time limit
                 depth = 1
-                while True:
-                    # print("DEBUG>>> depth = %d" % depth)
+                depthbound = len(game.get_blank_spaces())
+                while depth <= depthbound:
+                    #print("DEBUG>>> depth = %d" % depth, flush=True)
                     _, predmove = self.minimax(game, depth) if self.method == 'minimax' else self.alphabeta(game, depth)
                     # save the move suggested by last iteration on depth
                     lastiter_move = predmove
@@ -219,6 +302,8 @@ class CustomPlayer:
         tuple(int, int)
             The best move for the current branch; (-1, -1) for no legal moves
         """
+        ## The following implementation is based on the pseudocode for minimax algorithm
+        ## given in AIMA 3ed book, Adversarial search.
         # Return the state utility if terminal
         val = game.utility(self)
         if val != 0.0:
@@ -279,6 +364,8 @@ class CustomPlayer:
         tuple(int, int)
             The best move for the current branch; (-1, -1) for no legal moves
         """
+        ## The following implementation is based on the pseudocode for
+        ## alpha-beta pruning algorithm given in AIMA 3ed book, Adversarial search.
         # Return the state utility if terminal
         val = game.utility(self)
         if val != 0.0:
@@ -295,7 +382,7 @@ class CustomPlayer:
         val = -99999.0 if maximizing_player else 99999.0
         # Get all legal moves of the current active player
         legal_moves = game.get_legal_moves()
-        # shuffle the moves list to try avoid any unlucky orderings (less pruning)
+        # shuffle the moves list to try avoid any unlucky sets of orderings that allow less pruning
         random.shuffle(legal_moves)
         nextmove = None
         for move in legal_moves:
